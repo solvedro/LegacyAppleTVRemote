@@ -1,0 +1,26 @@
+# Theos & Build Artifacts
+.theos/
+obj/
+packages/
+*.ipa
+*.deb
+*.dSYM/
+build/
+!dist/*.ipa
+!dist/*.deb
+
+# macOS / Windows OS files
+.DS_Store
+Thumbs.db
+*.swp
+*~
+*.orig
+
+# Python / Environment
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.atv_credentials
+*.credentials

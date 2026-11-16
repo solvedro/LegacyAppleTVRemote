@@ -1,0 +1,10 @@
+Package: ro.solved.appletvremote
+Name: ATV Remote
+Depends: 
+Version: 1.0.0
+Architecture: iphoneos-arm
+Description: Modern Apple TV 4K/HD standalone remote control for legacy iOS.
+Maintainer: solvedro
+Author: solvedro
+Section: Multimedia
+Tag: role::hacker

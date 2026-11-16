@@ -1,0 +1,40 @@
+name: Publish Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }} - Standalone Legacy Apple TV Remote
+          body: |
+            ## Standalone Apple TV 4K / HD Remote for Legacy iOS (iOS 5.0 - 6.1.6)
+
+            ### Included Assets:
+            - **`AppleTVRemote.ipa`**: Standalone application bundle (for installation via 3uTools, iFunBox, legacy iTunes 12.6.5, or `ideviceinstaller`).
+            - **`ro.solved.appletvremote_1.0.0-1+debug_iphoneos-arm.deb`**: Cydia Debian package (for installation via Cydia, iFile, Filza, or `dpkg -i`).
+
+            ### Prerequisites:
+            - Jailbroken 32-bit iOS device (iPod touch 3/4, iPhone 3GS/4/4S, iPad 1/2) running iOS 5.0 through 6.1.6.
+            - **AppSync Unified** installed from Cydia (`https://cydia.akemi.ai/`) for `.ipa` installation.
+            - Same Wi-Fi LAN network as Apple TV.
+            - One-time PC Python helper (`Tools/atv_bridge.py`) for initial PIN SRP pairing.
+          files: |
+            dist/AppleTVRemote.ipa
+            dist/ro.solved.appletvremote_1.0.0-1+debug_iphoneos-arm.deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
