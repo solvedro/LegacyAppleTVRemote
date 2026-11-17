@@ -15,10 +15,15 @@ Turn your classic iPod touch into a dedicated, premium living-room remote contro
 ## ✨ Features
 
 - **Standalone Direct Connection:** Connects directly over TCP to Apple TV Companion port `50590`. Once paired, no PC, server, or bridge is needed.
-- **D-Pad & Gesture Trackpad:**
-  - Center **OK / Select** button with tactile click.
-  - Quadrant directional arrows (**Up, Down, Left, Right**) with visual flash indicators.
-  - Directional swipe gestures on the circular trackpad ring.
+- **Power ON / Wake & Sleep Controls (`⏻ PWR`):**
+  - **Wake & HDMI-CEC Power:** Wakes Apple TV from sleep and turns on the connected television automatically.
+  - **Power Sheet & Quick Sleep:** Single tap offers sleep/wake options; 0.8s long-press sends immediate sleep command to put Apple TV into standby.
+  - **Dynamic Status Indicator:** Power button border and text dynamically illuminate green when connected and amber/red when disconnected.
+- **Multi-Directional Swipe Trackpad (`ATRTrackpadView`):**
+  - High-precision touch engine capturing 100% of gestures across the entire circular surface.
+  - **Fluid Swipe Gestures:** Continuous dragging and swipe flicks in all 4 directions (**Up, Down, Left, Right**) to smoothly navigate tvOS menus, apps, and lists.
+  - Center **OK / Select** button (<39 pt) with visual illumination, allowing swipes that start at the center to naturally register as directional navigation.
+  - Quadrant directional arrow taps with responsive visual flash indicators.
 - **Physical Remote Controls:**
   - **Menu / Back**, **Home / TV**, **Play / Pause**, **Mute**, and **Volume Up / Down**.
 - **Installed App Launcher & Shortcuts (`📱 APPS`):**

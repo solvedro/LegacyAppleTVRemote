@@ -4,24 +4,21 @@
 #import "ATRClient.h"
 #import "Companion/ATRCompanionClient.h"
 #import "ATRIconProvider.h"
+#import "ATRTrackpadView.h"
 #import <AudioToolbox/AudioToolbox.h>
 #import <QuartzCore/QuartzCore.h>
 
-@interface ATRRemoteViewController () <ATRSettingsDelegate, ATRCompanionClientDelegate, ATRAppsViewControllerDelegate>
+@interface ATRRemoteViewController () <ATRSettingsDelegate, ATRCompanionClientDelegate, ATRAppsViewControllerDelegate, ATRTrackpadViewDelegate, UIActionSheetDelegate>
 
 @property (nonatomic, strong) UIView *headerView;
 @property (nonatomic, strong) UIView *ledDot;
 @property (nonatomic, strong) UILabel *titleLabel;
 @property (nonatomic, strong) UIButton *appsButton;
 @property (nonatomic, strong) UIButton *gearButton;
+@property (nonatomic, strong) UIButton *powerButton;
 
 // Trackpad
-@property (nonatomic, strong) UIView *trackpadRingView;
-@property (nonatomic, strong) UIButton *centerSelectButton;
-@property (nonatomic, strong) UILabel *arrowUp;
-@property (nonatomic, strong) UILabel *arrowDown;
-@property (nonatomic, strong) UILabel *arrowLeft;
-@property (nonatomic, strong) UILabel *arrowRight;
+@property (nonatomic, strong) ATRTrackpadView *trackpadView;
 
 // Now Playing
 @property (nonatomic, strong) UIView *marqueeContainer;
@@ -160,7 +157,7 @@
     [self.view addSubview:self.headerView];
     
     // Status LED dot
-    self.ledDot = [[UIView alloc] initWithFrame:CGRectMake(16, 14, 10, 10)];
+    self.ledDot = [[UIView alloc] initWithFrame:CGRectMake(10, 15, 10, 10)];
     self.ledDot.layer.cornerRadius = 5.0;
     self.ledDot.layer.masksToBounds = YES;
     self.ledDot.backgroundColor = [UIColor colorWithRed:0.9 green:0.2 blue:0.2 alpha:1.0]; // Red initially
@@ -169,10 +166,10 @@
     [self.headerView addSubview:self.ledDot];
     
     // Device title
-    self.titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(32, 7, 150, 24)];
+    self.titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(24, 7, 108, 26)];
     self.titleLabel.text = @"Apple TV 4K";
     self.titleLabel.textColor = [UIColor whiteColor];
-    self.titleLabel.font = [UIFont boldSystemFontOfSize:16];
+    self.titleLabel.font = [UIFont boldSystemFontOfSize:15];
     self.titleLabel.backgroundColor = [UIColor clearColor];
     self.titleLabel.shadowColor = [UIColor blackColor];
     self.titleLabel.shadowOffset = CGSizeMake(0, 1);
@@ -180,7 +177,7 @@
     
     // Apps Button
     self.appsButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    self.appsButton.frame = CGRectMake(190, 5, 72, 30);
+    self.appsButton.frame = CGRectMake(134, 5, 66, 30);
     [self.appsButton setTitle:@"📱 APPS" forState:UIControlStateNormal];
     [self.appsButton setTitleColor:[UIColor colorWithWhite:0.92 alpha:1.0] forState:UIControlStateNormal];
     [self.appsButton setTitleColor:[UIColor colorWithRed:0.35 green:0.80 blue:1.0 alpha:1.0] forState:UIControlStateHighlighted];
@@ -194,13 +191,32 @@
     
     // Settings Gear button
     self.gearButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    self.gearButton.frame = CGRectMake(272, 4, 36, 32);
+    self.gearButton.frame = CGRectMake(204, 5, 34, 30);
     [self.gearButton setTitle:@"⚙" forState:UIControlStateNormal];
     [self.gearButton setTitleColor:[UIColor colorWithWhite:0.8 alpha:1.0] forState:UIControlStateNormal];
     [self.gearButton setTitleColor:[UIColor colorWithRed:0.35 green:0.75 blue:1.0 alpha:1.0] forState:UIControlStateHighlighted];
-    self.gearButton.titleLabel.font = [UIFont systemFontOfSize:22];
+    self.gearButton.titleLabel.font = [UIFont systemFontOfSize:20];
     [self.gearButton addTarget:self action:@selector(gearTapped) forControlEvents:UIControlEventTouchUpInside];
     [self.headerView addSubview:self.gearButton];
+    
+    // Power ON / Sleep Button
+    self.powerButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    self.powerButton.frame = CGRectMake(242, 5, 68, 30);
+    [self.powerButton setTitle:@"⏻ PWR" forState:UIControlStateNormal];
+    [self.powerButton setTitleColor:[UIColor colorWithRed:0.35 green:1.0 blue:0.5 alpha:1.0] forState:UIControlStateNormal];
+    [self.powerButton setTitleColor:[UIColor whiteColor] forState:UIControlStateHighlighted];
+    self.powerButton.titleLabel.font = [UIFont boldSystemFontOfSize:13];
+    self.powerButton.backgroundColor = [UIColor colorWithWhite:0.18 alpha:0.95];
+    self.powerButton.layer.cornerRadius = 6.0;
+    self.powerButton.layer.borderColor = [UIColor colorWithRed:0.35 green:1.0 blue:0.5 alpha:0.4].CGColor;
+    self.powerButton.layer.borderWidth = 1.0;
+    [self.powerButton addTarget:self action:@selector(powerTapped) forControlEvents:UIControlEventTouchUpInside];
+    
+    UILongPressGestureRecognizer *pwrLong = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(handlePowerLongPress:)];
+    pwrLong.minimumPressDuration = 0.8;
+    [self.powerButton addGestureRecognizer:pwrLong];
+    
+    [self.headerView addSubview:self.powerButton];
 }
 
 - (void)setupTrackpad {
@@ -208,73 +224,9 @@
     CGFloat padX = (320.0 - diameter) / 2.0; // 62
     CGFloat padY = 60.0;
     
-    self.trackpadRingView = [[UIView alloc] initWithFrame:CGRectMake(padX, padY, diameter, diameter)];
-    self.trackpadRingView.layer.cornerRadius = diameter / 2.0;
-    self.trackpadRingView.layer.masksToBounds = YES;
-    self.trackpadRingView.backgroundColor = [UIColor colorWithWhite:0.13 alpha:0.95];
-    self.trackpadRingView.layer.borderColor = [UIColor colorWithWhite:0.28 alpha:1.0].CGColor;
-    self.trackpadRingView.layer.borderWidth = 1.5;
-    [self.view addSubview:self.trackpadRingView];
-    
-    // Direction markings
-    CGFloat centerD = 78.0;
-    CGFloat padSide = (diameter - centerD) / 2.0; // 59.0
-    self.arrowUp = [self createArrowLabel:@"▲" frame:CGRectMake(0, 8, diameter, 24)];
-    self.arrowDown = [self createArrowLabel:@"▼" frame:CGRectMake(0, diameter - 32, diameter, 24)];
-    self.arrowLeft = [self createArrowLabel:@"◄" frame:CGRectMake(0, (diameter - 24) / 2.0, padSide, 24)];
-    self.arrowRight = [self createArrowLabel:@"►" frame:CGRectMake(diameter - padSide, (diameter - 24) / 2.0, padSide, 24)];
-    
-    [self.trackpadRingView addSubview:self.arrowUp];
-    [self.trackpadRingView addSubview:self.arrowDown];
-    [self.trackpadRingView addSubview:self.arrowLeft];
-    [self.trackpadRingView addSubview:self.arrowRight];
-    
-    // Center Select Button
-    CGFloat centerOffset = (diameter - centerD) / 2.0;
-    self.centerSelectButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    self.centerSelectButton.frame = CGRectMake(centerOffset, centerOffset, centerD, centerD);
-    self.centerSelectButton.layer.cornerRadius = centerD / 2.0;
-    self.centerSelectButton.layer.masksToBounds = YES;
-    self.centerSelectButton.backgroundColor = [UIColor colorWithWhite:0.18 alpha:1.0];
-    self.centerSelectButton.layer.borderColor = [UIColor colorWithWhite:0.35 alpha:1.0].CGColor;
-    self.centerSelectButton.layer.borderWidth = 1.0;
-    [self.centerSelectButton setTitle:@"OK" forState:UIControlStateNormal];
-    [self.centerSelectButton setTitleColor:[UIColor colorWithWhite:0.85 alpha:1.0] forState:UIControlStateNormal];
-    [self.centerSelectButton setTitleColor:[UIColor colorWithRed:0.35 green:0.75 blue:1.0 alpha:1.0] forState:UIControlStateHighlighted];
-    self.centerSelectButton.titleLabel.font = [UIFont boldSystemFontOfSize:16];
-    [self.centerSelectButton addTarget:self action:@selector(selectTapped) forControlEvents:UIControlEventTouchUpInside];
-    [self.trackpadRingView addSubview:self.centerSelectButton];
-    
-    // Touch tap & swipe gestures on trackpad ring
-    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTrackpadTap:)];
-    [self.trackpadRingView addGestureRecognizer:tap];
-    
-    UISwipeGestureRecognizer *swipeUp = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(handleSwipeUp)];
-    swipeUp.direction = UISwipeGestureRecognizerDirectionUp;
-    [self.trackpadRingView addGestureRecognizer:swipeUp];
-    
-    UISwipeGestureRecognizer *swipeDown = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(handleSwipeDown)];
-    swipeDown.direction = UISwipeGestureRecognizerDirectionDown;
-    [self.trackpadRingView addGestureRecognizer:swipeDown];
-    
-    UISwipeGestureRecognizer *swipeLeft = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(handleSwipeLeft)];
-    swipeLeft.direction = UISwipeGestureRecognizerDirectionLeft;
-    [self.trackpadRingView addGestureRecognizer:swipeLeft];
-    
-    UISwipeGestureRecognizer *swipeRight = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(handleSwipeRight)];
-    swipeRight.direction = UISwipeGestureRecognizerDirectionRight;
-    [self.trackpadRingView addGestureRecognizer:swipeRight];
-}
-
-- (UILabel *)createArrowLabel:(NSString *)text frame:(CGRect)frame {
-    UILabel *lbl = [[UILabel alloc] initWithFrame:frame];
-    lbl.text = text;
-    lbl.textColor = [UIColor colorWithWhite:0.55 alpha:1.0];
-    lbl.font = [UIFont boldSystemFontOfSize:15];
-    lbl.textAlignment = UITextAlignmentCenter;
-    lbl.backgroundColor = [UIColor clearColor];
-    lbl.adjustsFontSizeToFitWidth = YES;
-    return lbl;
+    self.trackpadView = [[ATRTrackpadView alloc] initWithFrame:CGRectMake(padX, padY, diameter, diameter)];
+    self.trackpadView.delegate = self;
+    [self.view addSubview:self.trackpadView];
 }
 
 - (void)setupNowPlayingMarquee {
@@ -453,67 +405,57 @@
     [self sendCommand:@"volume_up"];
 }
 
-- (void)handleSwipeUp {
-    [self playClickSound];
-    [self flashArrow:self.arrowUp];
-    [self sendCommand:@"up"];
+#pragma mark - ATRTrackpadViewDelegate
+
+- (void)trackpadViewDidSelect:(ATRTrackpadView *)trackpad {
+    [self selectTapped];
 }
 
-- (void)handleSwipeDown {
+- (void)trackpadView:(ATRTrackpadView *)trackpad didNavigateInDirection:(NSString *)direction isSwipe:(BOOL)isSwipe {
     [self playClickSound];
-    [self flashArrow:self.arrowDown];
-    [self sendCommand:@"down"];
+    [self sendCommand:direction];
 }
 
-- (void)handleSwipeLeft {
-    [self playClickSound];
-    [self flashArrow:self.arrowLeft];
-    [self sendCommand:@"left"];
-}
+#pragma mark - Power Controls
 
-- (void)handleSwipeRight {
+- (void)powerTapped {
     [self playClickSound];
-    [self flashArrow:self.arrowRight];
-    [self sendCommand:@"right"];
-}
-
-- (void)handleTrackpadTap:(UITapGestureRecognizer *)tap {
-    CGPoint pt = [tap locationInView:self.trackpadRingView];
-    CGFloat center = self.trackpadRingView.bounds.size.width / 2.0;
-    CGFloat dx = pt.x - center;
-    CGFloat dy = pt.y - center;
-    CGFloat dist = sqrt(dx * dx + dy * dy);
     
-    if (dist < 39.0) {
-        [self selectTapped];
-        return;
-    }
+    NSString *mode = [[NSUserDefaults standardUserDefaults] stringForKey:@"ATRConnectionMode"];
+    BOOL isStandalone = ![mode isEqualToString:@"Bridge"];
+    BOOL connected = isStandalone ? [ATRCompanionClient sharedClient].isEncrypted : [ATRClient sharedClient].isConnected;
     
-    [self playClickSound];
-    if (fabs(dx) > fabs(dy)) {
-        if (dx > 0) {
-            [self flashArrow:self.arrowRight];
-            [self sendCommand:@"right"];
-        } else {
-            [self flashArrow:self.arrowLeft];
-            [self sendCommand:@"left"];
-        }
+    if (!connected) {
+        // Asleep or disconnected: send Wake command
+        [self sendCommand:@"wake"];
+        self.marqueeLabel.text = @"Waking Apple TV...";
     } else {
-        if (dy > 0) {
-            [self flashArrow:self.arrowDown];
-            [self sendCommand:@"down"];
-        } else {
-            [self flashArrow:self.arrowUp];
-            [self sendCommand:@"up"];
-        }
+        // Connected: show Power sheet
+        UIActionSheet *sheet = [[UIActionSheet alloc] initWithTitle:@"Apple TV Power"
+                                                           delegate:self
+                                                  cancelButtonTitle:@"Cancel"
+                                             destructiveButtonTitle:@"Sleep Apple TV"
+                                                  otherButtonTitles:@"Wake Apple TV", nil];
+        [sheet showInView:self.view];
     }
 }
 
-- (void)flashArrow:(UILabel *)arrow {
-    arrow.textColor = [UIColor colorWithRed:0.35 green:0.80 blue:1.0 alpha:1.0];
-    [UIView animateWithDuration:0.25 animations:^{
-        arrow.textColor = [UIColor colorWithWhite:0.5 alpha:1.0];
-    }];
+- (void)handlePowerLongPress:(UILongPressGestureRecognizer *)gesture {
+    if (gesture.state == UIGestureRecognizerStateBegan) {
+        [self playClickSound];
+        [self sendCommand:@"sleep"];
+        self.marqueeLabel.text = @"Putting Apple TV to Sleep...";
+    }
+}
+
+- (void)actionSheet:(UIActionSheet *)actionSheet clickedButtonAtIndex:(NSInteger)buttonIndex {
+    if (buttonIndex == actionSheet.destructiveButtonIndex) {
+        [self playClickSound];
+        [self sendCommand:@"sleep"];
+    } else if (buttonIndex == 1) {
+        [self playClickSound];
+        [self sendCommand:@"wake"];
+    }
 }
 
 - (void)sendCommand:(NSString *)key {
@@ -572,10 +514,16 @@
         
         if (client.isConnected && client.isPaired) {
             self.ledDot.backgroundColor = [UIColor colorWithRed:0.2 green:0.85 blue:0.35 alpha:1.0]; // Bright Green
+            [self.powerButton setTitleColor:[UIColor colorWithRed:0.35 green:1.0 blue:0.5 alpha:1.0] forState:UIControlStateNormal];
+            self.powerButton.layer.borderColor = [UIColor colorWithRed:0.35 green:1.0 blue:0.5 alpha:0.8].CGColor;
         } else if (client.isPaired) {
             self.ledDot.backgroundColor = [UIColor colorWithRed:0.95 green:0.75 blue:0.2 alpha:1.0]; // Amber
+            [self.powerButton setTitleColor:[UIColor colorWithRed:1.0 green:0.75 blue:0.2 alpha:1.0] forState:UIControlStateNormal];
+            self.powerButton.layer.borderColor = [UIColor colorWithRed:1.0 green:0.75 blue:0.2 alpha:0.6].CGColor;
         } else {
             self.ledDot.backgroundColor = [UIColor colorWithRed:0.95 green:0.25 blue:0.25 alpha:1.0]; // Red
+            [self.powerButton setTitleColor:[UIColor colorWithRed:1.0 green:0.35 blue:0.35 alpha:1.0] forState:UIControlStateNormal];
+            self.powerButton.layer.borderColor = [UIColor colorWithRed:1.0 green:0.35 blue:0.35 alpha:0.5].CGColor;
         }
     } else {
         // Direct Companion Mode
@@ -584,15 +532,23 @@
         if (comp.isEncrypted) {
             self.ledDot.backgroundColor = [UIColor colorWithRed:0.2 green:0.85 blue:0.35 alpha:1.0]; // Green
             self.marqueeLabel.text = @"Apple TV 4K • Direct Connected";
+            [self.powerButton setTitleColor:[UIColor colorWithRed:0.35 green:1.0 blue:0.5 alpha:1.0] forState:UIControlStateNormal];
+            self.powerButton.layer.borderColor = [UIColor colorWithRed:0.35 green:1.0 blue:0.5 alpha:0.8].CGColor;
         } else if (comp.isConnected) {
             self.ledDot.backgroundColor = [UIColor colorWithRed:0.95 green:0.75 blue:0.2 alpha:1.0]; // Amber
             self.marqueeLabel.text = @"Direct Connecting...";
+            [self.powerButton setTitleColor:[UIColor colorWithRed:1.0 green:0.75 blue:0.2 alpha:1.0] forState:UIControlStateNormal];
+            self.powerButton.layer.borderColor = [UIColor colorWithRed:1.0 green:0.75 blue:0.2 alpha:0.6].CGColor;
         } else if (comp.isPaired) {
             self.ledDot.backgroundColor = [UIColor colorWithWhite:0.5 alpha:1.0]; // Gray
             self.marqueeLabel.text = @"Standalone Mode (Paired)";
+            [self.powerButton setTitleColor:[UIColor colorWithRed:0.35 green:1.0 blue:0.5 alpha:1.0] forState:UIControlStateNormal];
+            self.powerButton.layer.borderColor = [UIColor colorWithRed:0.35 green:1.0 blue:0.5 alpha:0.4].CGColor;
         } else {
             self.ledDot.backgroundColor = [UIColor colorWithRed:0.95 green:0.25 blue:0.25 alpha:1.0]; // Red
             self.marqueeLabel.text = @"Standalone (Tap ⚙ to Setup)";
+            [self.powerButton setTitleColor:[UIColor colorWithRed:1.0 green:0.35 blue:0.35 alpha:1.0] forState:UIControlStateNormal];
+            self.powerButton.layer.borderColor = [UIColor colorWithRed:1.0 green:0.35 blue:0.35 alpha:0.5].CGColor;
         }
     }
 }

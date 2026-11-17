@@ -14,6 +14,7 @@ AppleTVRemote_FILES = \
     Classes/ATRAppsViewController.m \
     Classes/ATRClient.m \
     Classes/ATRIconProvider.m \
+    Classes/ATRTrackpadView.m \
     Classes/Crypto/tweetnacl.c \
     Classes/Crypto/atr_chacha20_poly1305.c \
     Classes/Companion/ATROpack.m \
