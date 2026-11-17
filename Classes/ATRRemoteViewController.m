@@ -29,6 +29,9 @@
 @property (nonatomic, strong) UILabel *marqueeLabel;
 @property (nonatomic, strong) NSString *currentNowPlayingTitle;
 @property (nonatomic, strong) NSString *currentNowPlayingArtist;
+@property (nonatomic, strong) NSString *currentActiveAppName;
+@property (nonatomic, strong) NSString *currentActiveBundleID;
+@property (nonatomic, assign) BOOL isPlaying;
 @property (nonatomic, strong) UIImage *currentArtworkImage;
 @property (nonatomic, strong) UIView *nowPlayingOverlay;
 
@@ -77,7 +80,19 @@
                                                  name:kATRNowPlayingChangedNotification
                                                object:nil];
                                                
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(activeAppNotificationReceived:)
+                                                 name:@"ATRActiveAppChangedNotification"
+                                               object:nil];
+                                               
     [ATRCompanionClient sharedClient].delegate = self;
+    
+    // Restore persistent active app if available
+    NSString *lastAppName = [[NSUserDefaults standardUserDefaults] stringForKey:@"ATRLastActiveAppName"];
+    NSString *lastBundleID = [[NSUserDefaults standardUserDefaults] stringForKey:@"ATRLastActiveBundleID"];
+    if (lastAppName && [lastAppName length] > 0) {
+        [self applyActiveAppNamed:lastAppName bundleID:lastBundleID isPlaying:YES];
+    }
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -391,6 +406,16 @@
     [self dismissModalViewControllerAnimated:YES];
 }
 
+- (void)appsViewControllerDidLaunchAppNamed:(NSString *)name bundleID:(NSString *)bundleID {
+    [self applyActiveAppNamed:name bundleID:bundleID isPlaying:YES];
+}
+
+- (void)activeAppNotificationReceived:(NSNotification *)note {
+    NSString *name = [note.userInfo objectForKey:@"name"];
+    NSString *bundleID = [note.userInfo objectForKey:@"bundleID"];
+    [self applyActiveAppNamed:name bundleID:bundleID isPlaying:YES];
+}
+
 - (void)selectTapped {
     [self playClickSound];
     [self sendCommand:@"select"];
@@ -404,11 +429,13 @@
 - (void)homeTapped {
     [self playClickSound];
     [self sendCommand:@"home"];
+    [self applyHomeScreenStatus];
 }
 
 - (void)playPauseTapped {
     [self playClickSound];
     [self sendCommand:@"play_pause"];
+    [self togglePlayPauseStatus];
 }
 
 - (void)muteTapped {
@@ -582,35 +609,50 @@
     }
 }
 
-- (void)applyNowPlayingTitle:(NSString *)title artist:(NSString *)artist {
-    self.currentNowPlayingTitle = title;
-    self.currentNowPlayingArtist = artist;
+- (void)applyActiveAppNamed:(NSString *)name bundleID:(NSString *)bundleID isPlaying:(BOOL)isPlaying {
+    if (!name || [name length] == 0) return;
     
+    self.currentActiveAppName = name;
+    self.currentActiveBundleID = bundleID;
+    self.isPlaying = isPlaying;
+    
+    // Set custom app icon
+    UIImage *appIcon = [ATRIconProvider iconForBundleID:bundleID name:name size:CGSizeMake(22, 22)];
+    self.currentArtworkImage = [ATRIconProvider iconForBundleID:bundleID name:name size:CGSizeMake(150, 150)];
+    
+    self.nowPlayingThumbView.image = appIcon;
+    self.nowPlayingThumbView.hidden = NO;
+    
+    NSString *symbol = isPlaying ? @"▶" : @"⏸";
+    self.marqueeLabel.text = [NSString stringWithFormat:@"%@ %@ • %@", symbol, name, isPlaying ? @"Active" : @"Paused"];
+    self.marqueeLabel.frame = CGRectMake(32, 4, 240, 20);
+    self.marqueeLabel.textAlignment = UITextAlignmentLeft;
+}
+
+- (void)togglePlayPauseStatus {
+    if (self.currentActiveAppName) {
+        self.isPlaying = !self.isPlaying;
+        [self applyActiveAppNamed:self.currentActiveAppName bundleID:self.currentActiveBundleID isPlaying:self.isPlaying];
+    }
+}
+
+- (void)applyHomeScreenStatus {
+    self.currentActiveAppName = nil;
+    self.currentActiveBundleID = nil;
+    self.currentArtworkImage = nil;
+    self.nowPlayingThumbView.hidden = YES;
+    self.marqueeLabel.frame = CGRectMake(12, 4, 256, 20);
+    self.marqueeLabel.textAlignment = UITextAlignmentCenter;
+    self.marqueeLabel.text = @"Apple TV 4K • Home Screen";
+}
+
+- (void)applyNowPlayingTitle:(NSString *)title artist:(NSString *)artist {
     if (title && [title length] > 0) {
-        NSString *displayText = (artist && [artist length] > 0) ? [NSString stringWithFormat:@"%@ • %@", title, artist] : title;
-        self.marqueeLabel.text = displayText;
-        
-        // Show thumbnail view on the left of the marquee
-        self.nowPlayingThumbView.hidden = NO;
-        self.marqueeLabel.frame = CGRectMake(32, 4, 240, 20);
-        self.marqueeLabel.textAlignment = UITextAlignmentLeft;
-        
-        // Initial default thumbnail
-        self.nowPlayingThumbView.image = [ATRIconProvider defaultThumbnailForMediaTitle:title artist:artist];
-        
-        // Asynchronously fetch real artwork thumbnail from iTunes
-        [ATRIconProvider fetchArtworkForTitle:title artist:artist completion:^(UIImage *artwork) {
-            if (artwork && [self.currentNowPlayingTitle isEqualToString:title]) {
-                self.currentArtworkImage = artwork;
-                [UIView transitionWithView:self.nowPlayingThumbView
-                                  duration:0.35
-                                   options:UIViewAnimationOptionTransitionCrossDissolve
-                                animations:^{
-                    self.nowPlayingThumbView.image = artwork;
-                } completion:nil];
-            }
-        }];
-    } else {
+        [self applyActiveAppNamed:title bundleID:nil isPlaying:YES];
+        if (artist && [artist length] > 0) {
+            self.marqueeLabel.text = [NSString stringWithFormat:@"▶ %@ • %@", title, artist];
+        }
+    } else if (!self.currentActiveAppName) {
         self.currentArtworkImage = nil;
         self.nowPlayingThumbView.hidden = YES;
         self.marqueeLabel.frame = CGRectMake(12, 4, 256, 20);
@@ -620,8 +662,16 @@
 }
 
 - (void)marqueeTapped {
-    if (!self.currentNowPlayingTitle || [self.currentNowPlayingTitle length] == 0) return;
-    [self showNowPlayingPopup];
+    if (self.currentActiveAppName) {
+        [self showNowPlayingPopup];
+    } else {
+        [self appsTapped];
+    }
+}
+
+- (void)popupSwitchAppTapped {
+    [self dismissNowPlayingPopup];
+    [self appsTapped];
 }
 
 - (void)showNowPlayingPopup {
@@ -635,7 +685,7 @@
     [self.nowPlayingOverlay addGestureRecognizer:dismissTap];
     
     // Popup Card
-    UIView *card = [[UIView alloc] initWithFrame:CGRectMake(30, 90, 260, 300)];
+    UIView *card = [[UIView alloc] initWithFrame:CGRectMake(30, 80, 260, 310)];
     card.backgroundColor = [UIColor colorWithRed:0.12 green:0.13 blue:0.16 alpha:0.98];
     card.layer.cornerRadius = 14.0;
     card.layer.borderColor = [UIColor colorWithWhite:0.35 alpha:1.0].CGColor;
@@ -648,27 +698,27 @@
     
     // Artwork Image View
     UIImageView *largeArt = [[UIImageView alloc] initWithFrame:CGRectMake(55, 20, 150, 150)];
-    largeArt.layer.cornerRadius = 10.0;
+    largeArt.layer.cornerRadius = 12.0;
     largeArt.layer.masksToBounds = YES;
     largeArt.contentMode = UIViewContentModeScaleAspectFill;
-    largeArt.image = self.currentArtworkImage ?: [ATRIconProvider defaultThumbnailForMediaTitle:self.currentNowPlayingTitle artist:self.currentNowPlayingArtist];
+    largeArt.image = self.currentArtworkImage ?: [ATRIconProvider iconForBundleID:self.currentActiveBundleID name:self.currentActiveAppName size:CGSizeMake(150, 150)];
     largeArt.layer.borderColor = [UIColor colorWithWhite:0.3 alpha:0.6].CGColor;
     largeArt.layer.borderWidth = 1.0;
     [card addSubview:largeArt];
     
     // Title Label
-    UILabel *titleLbl = [[UILabel alloc] initWithFrame:CGRectMake(16, 182, 228, 26)];
-    titleLbl.text = self.currentNowPlayingTitle ?: @"Now Playing";
+    UILabel *titleLbl = [[UILabel alloc] initWithFrame:CGRectMake(16, 180, 228, 28)];
+    titleLbl.text = self.currentActiveAppName ?: @"Apple TV 4K";
     titleLbl.textColor = [UIColor whiteColor];
-    titleLbl.font = [UIFont boldSystemFontOfSize:16];
+    titleLbl.font = [UIFont boldSystemFontOfSize:18];
     titleLbl.textAlignment = UITextAlignmentCenter;
     titleLbl.adjustsFontSizeToFitWidth = YES;
     titleLbl.backgroundColor = [UIColor clearColor];
     [card addSubview:titleLbl];
     
-    // Artist Label
-    UILabel *artistLbl = [[UILabel alloc] initWithFrame:CGRectMake(16, 210, 228, 20)];
-    artistLbl.text = self.currentNowPlayingArtist ?: @"";
+    // Status Label
+    UILabel *artistLbl = [[UILabel alloc] initWithFrame:CGRectMake(16, 208, 228, 20)];
+    artistLbl.text = self.isPlaying ? @"Playing on Apple TV 4K" : @"Paused on Apple TV 4K";
     artistLbl.textColor = [UIColor colorWithRed:0.35 green:0.75 blue:1.0 alpha:1.0];
     artistLbl.font = [UIFont systemFontOfSize:13];
     artistLbl.textAlignment = UITextAlignmentCenter;
@@ -676,9 +726,22 @@
     artistLbl.backgroundColor = [UIColor clearColor];
     [card addSubview:artistLbl];
     
-    // Dismiss button
+    // Switch App button
+    UIButton *switchBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+    switchBtn.frame = CGRectMake(18, 248, 106, 36);
+    switchBtn.backgroundColor = [UIColor colorWithRed:0.20 green:0.55 blue:0.90 alpha:1.0];
+    switchBtn.layer.cornerRadius = 6.0;
+    switchBtn.layer.borderColor = [UIColor colorWithWhite:0.4 alpha:0.5].CGColor;
+    switchBtn.layer.borderWidth = 1.0;
+    [switchBtn setTitle:@"📱 Apps" forState:UIControlStateNormal];
+    [switchBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    switchBtn.titleLabel.font = [UIFont boldSystemFontOfSize:14];
+    [switchBtn addTarget:self action:@selector(popupSwitchAppTapped) forControlEvents:UIControlEventTouchUpInside];
+    [card addSubview:switchBtn];
+    
+    // Close button
     UIButton *closeBtn = [UIButton buttonWithType:UIButtonTypeCustom];
-    closeBtn.frame = CGRectMake(80, 246, 100, 34);
+    closeBtn.frame = CGRectMake(136, 248, 106, 36);
     closeBtn.backgroundColor = [UIColor colorWithWhite:0.22 alpha:1.0];
     closeBtn.layer.cornerRadius = 6.0;
     closeBtn.layer.borderColor = [UIColor colorWithWhite:0.4 alpha:0.5].CGColor;

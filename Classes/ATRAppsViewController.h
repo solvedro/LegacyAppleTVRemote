@@ -3,6 +3,7 @@
 @protocol ATRAppsViewControllerDelegate <NSObject>
 @optional
 - (void)appsViewControllerDidDismiss;
+- (void)appsViewControllerDidLaunchAppNamed:(NSString *)name bundleID:(NSString *)bundleID;
 @end
 
 @interface ATRAppsViewController : UIViewController <UITableViewDataSource, UITableViewDelegate>

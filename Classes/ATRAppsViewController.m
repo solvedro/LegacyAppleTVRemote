@@ -322,6 +322,18 @@ static NSString * const kATRCachedAppsPrefKey = @"ATRCachedLaunchableApps";
         [[ATRCompanionClient sharedClient] launchAppWithBundleID:bundleID];
     }
     
+    // Save active app persistently
+    [[NSUserDefaults standardUserDefaults] setObject:name forKey:@"ATRLastActiveAppName"];
+    [[NSUserDefaults standardUserDefaults] setObject:bundleID forKey:@"ATRLastActiveBundleID"];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+    
+    if (self.delegate && [self.delegate respondsToSelector:@selector(appsViewControllerDidLaunchAppNamed:bundleID:)]) {
+        [self.delegate appsViewControllerDidLaunchAppNamed:name bundleID:bundleID];
+    }
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"ATRActiveAppChangedNotification"
+                                                        object:nil
+                                                      userInfo:@{@"name": name, @"bundleID": bundleID}];
+    
     // Show brief confirmation and dismiss
     NSLog(@"[Apps] Launched '%@' (%@)", name, bundleID);
     [self doneTapped];
