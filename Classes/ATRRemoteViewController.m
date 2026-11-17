@@ -3,6 +3,7 @@
 #import "ATRAppsViewController.h"
 #import "ATRClient.h"
 #import "Companion/ATRCompanionClient.h"
+#import "ATRIconProvider.h"
 #import <AudioToolbox/AudioToolbox.h>
 #import <QuartzCore/QuartzCore.h>
 
@@ -24,7 +25,12 @@
 
 // Now Playing
 @property (nonatomic, strong) UIView *marqueeContainer;
+@property (nonatomic, strong) UIImageView *nowPlayingThumbView;
 @property (nonatomic, strong) UILabel *marqueeLabel;
+@property (nonatomic, strong) NSString *currentNowPlayingTitle;
+@property (nonatomic, strong) NSString *currentNowPlayingArtist;
+@property (nonatomic, strong) UIImage *currentArtworkImage;
+@property (nonatomic, strong) UIView *nowPlayingOverlay;
 
 // Buttons
 @property (nonatomic, strong) UIButton *menuButton;
@@ -263,7 +269,16 @@
     self.marqueeContainer.layer.borderColor = [UIColor colorWithWhite:0.25 alpha:0.7].CGColor;
     self.marqueeContainer.layer.borderWidth = 1.0;
     self.marqueeContainer.layer.masksToBounds = YES;
+    self.marqueeContainer.userInteractionEnabled = YES;
     [self.view addSubview:self.marqueeContainer];
+    
+    // Thumbnail view
+    self.nowPlayingThumbView = [[UIImageView alloc] initWithFrame:CGRectMake(4, 3, 22, 22)];
+    self.nowPlayingThumbView.layer.cornerRadius = 4.0;
+    self.nowPlayingThumbView.layer.masksToBounds = YES;
+    self.nowPlayingThumbView.contentMode = UIViewContentModeScaleAspectFill;
+    self.nowPlayingThumbView.hidden = YES;
+    [self.marqueeContainer addSubview:self.nowPlayingThumbView];
     
     self.marqueeLabel = [[UILabel alloc] initWithFrame:CGRectMake(12, 4, 256, 20)];
     self.marqueeLabel.text = @"Apple TV 4K • Ready";
@@ -272,6 +287,9 @@
     self.marqueeLabel.textAlignment = UITextAlignmentCenter;
     self.marqueeLabel.backgroundColor = [UIColor clearColor];
     [self.marqueeContainer addSubview:self.marqueeLabel];
+    
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(marqueeTapped)];
+    [self.marqueeContainer addGestureRecognizer:tap];
 }
 
 - (void)setupButtons {
@@ -557,15 +575,135 @@
     if ([mode isEqualToString:@"Bridge"]) {
         ATRClient *client = [ATRClient sharedClient];
         if (client.nowPlayingTitle.length > 0) {
-            if (client.nowPlayingArtist.length > 0) {
-                self.marqueeLabel.text = [NSString stringWithFormat:@"%@ • %@", client.nowPlayingTitle, client.nowPlayingArtist];
-            } else {
-                self.marqueeLabel.text = client.nowPlayingTitle;
-            }
+            [self applyNowPlayingTitle:client.nowPlayingTitle artist:client.nowPlayingArtist];
         } else {
-            self.marqueeLabel.text = client.isPaired ? @"Apple TV 4K • Ready" : @"Not Paired (Tap ⚙)";
+            [self applyNowPlayingTitle:nil artist:nil];
         }
     }
+}
+
+- (void)applyNowPlayingTitle:(NSString *)title artist:(NSString *)artist {
+    self.currentNowPlayingTitle = title;
+    self.currentNowPlayingArtist = artist;
+    
+    if (title && [title length] > 0) {
+        NSString *displayText = (artist && [artist length] > 0) ? [NSString stringWithFormat:@"%@ • %@", title, artist] : title;
+        self.marqueeLabel.text = displayText;
+        
+        // Show thumbnail view on the left of the marquee
+        self.nowPlayingThumbView.hidden = NO;
+        self.marqueeLabel.frame = CGRectMake(32, 4, 240, 20);
+        self.marqueeLabel.textAlignment = UITextAlignmentLeft;
+        
+        // Initial default thumbnail
+        self.nowPlayingThumbView.image = [ATRIconProvider defaultThumbnailForMediaTitle:title artist:artist];
+        
+        // Asynchronously fetch real artwork thumbnail from iTunes
+        [ATRIconProvider fetchArtworkForTitle:title artist:artist completion:^(UIImage *artwork) {
+            if (artwork && [self.currentNowPlayingTitle isEqualToString:title]) {
+                self.currentArtworkImage = artwork;
+                [UIView transitionWithView:self.nowPlayingThumbView
+                                  duration:0.35
+                                   options:UIViewAnimationOptionTransitionCrossDissolve
+                                animations:^{
+                    self.nowPlayingThumbView.image = artwork;
+                } completion:nil];
+            }
+        }];
+    } else {
+        self.currentArtworkImage = nil;
+        self.nowPlayingThumbView.hidden = YES;
+        self.marqueeLabel.frame = CGRectMake(12, 4, 256, 20);
+        self.marqueeLabel.textAlignment = UITextAlignmentCenter;
+        [self updateStatusUI];
+    }
+}
+
+- (void)marqueeTapped {
+    if (!self.currentNowPlayingTitle || [self.currentNowPlayingTitle length] == 0) return;
+    [self showNowPlayingPopup];
+}
+
+- (void)showNowPlayingPopup {
+    if (self.nowPlayingOverlay) return;
+    
+    self.nowPlayingOverlay = [[UIView alloc] initWithFrame:self.view.bounds];
+    self.nowPlayingOverlay.backgroundColor = [UIColor colorWithWhite:0.0 alpha:0.75];
+    self.nowPlayingOverlay.alpha = 0.0;
+    
+    UITapGestureRecognizer *dismissTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(dismissNowPlayingPopup)];
+    [self.nowPlayingOverlay addGestureRecognizer:dismissTap];
+    
+    // Popup Card
+    UIView *card = [[UIView alloc] initWithFrame:CGRectMake(30, 90, 260, 300)];
+    card.backgroundColor = [UIColor colorWithRed:0.12 green:0.13 blue:0.16 alpha:0.98];
+    card.layer.cornerRadius = 14.0;
+    card.layer.borderColor = [UIColor colorWithWhite:0.35 alpha:1.0].CGColor;
+    card.layer.borderWidth = 1.0;
+    card.layer.shadowColor = [UIColor blackColor].CGColor;
+    card.layer.shadowOffset = CGSizeMake(0, 4);
+    card.layer.shadowOpacity = 0.6;
+    card.layer.shadowRadius = 8.0;
+    [self.nowPlayingOverlay addSubview:card];
+    
+    // Artwork Image View
+    UIImageView *largeArt = [[UIImageView alloc] initWithFrame:CGRectMake(55, 20, 150, 150)];
+    largeArt.layer.cornerRadius = 10.0;
+    largeArt.layer.masksToBounds = YES;
+    largeArt.contentMode = UIViewContentModeScaleAspectFill;
+    largeArt.image = self.currentArtworkImage ?: [ATRIconProvider defaultThumbnailForMediaTitle:self.currentNowPlayingTitle artist:self.currentNowPlayingArtist];
+    largeArt.layer.borderColor = [UIColor colorWithWhite:0.3 alpha:0.6].CGColor;
+    largeArt.layer.borderWidth = 1.0;
+    [card addSubview:largeArt];
+    
+    // Title Label
+    UILabel *titleLbl = [[UILabel alloc] initWithFrame:CGRectMake(16, 182, 228, 26)];
+    titleLbl.text = self.currentNowPlayingTitle ?: @"Now Playing";
+    titleLbl.textColor = [UIColor whiteColor];
+    titleLbl.font = [UIFont boldSystemFontOfSize:16];
+    titleLbl.textAlignment = UITextAlignmentCenter;
+    titleLbl.adjustsFontSizeToFitWidth = YES;
+    titleLbl.backgroundColor = [UIColor clearColor];
+    [card addSubview:titleLbl];
+    
+    // Artist Label
+    UILabel *artistLbl = [[UILabel alloc] initWithFrame:CGRectMake(16, 210, 228, 20)];
+    artistLbl.text = self.currentNowPlayingArtist ?: @"";
+    artistLbl.textColor = [UIColor colorWithRed:0.35 green:0.75 blue:1.0 alpha:1.0];
+    artistLbl.font = [UIFont systemFontOfSize:13];
+    artistLbl.textAlignment = UITextAlignmentCenter;
+    artistLbl.adjustsFontSizeToFitWidth = YES;
+    artistLbl.backgroundColor = [UIColor clearColor];
+    [card addSubview:artistLbl];
+    
+    // Dismiss button
+    UIButton *closeBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+    closeBtn.frame = CGRectMake(80, 246, 100, 34);
+    closeBtn.backgroundColor = [UIColor colorWithWhite:0.22 alpha:1.0];
+    closeBtn.layer.cornerRadius = 6.0;
+    closeBtn.layer.borderColor = [UIColor colorWithWhite:0.4 alpha:0.5].CGColor;
+    closeBtn.layer.borderWidth = 1.0;
+    [closeBtn setTitle:@"Close" forState:UIControlStateNormal];
+    [closeBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    closeBtn.titleLabel.font = [UIFont boldSystemFontOfSize:14];
+    [closeBtn addTarget:self action:@selector(dismissNowPlayingPopup) forControlEvents:UIControlEventTouchUpInside];
+    [card addSubview:closeBtn];
+    
+    [self.view addSubview:self.nowPlayingOverlay];
+    
+    [UIView animateWithDuration:0.25 animations:^{
+        self.nowPlayingOverlay.alpha = 1.0;
+    }];
+}
+
+- (void)dismissNowPlayingPopup {
+    if (!self.nowPlayingOverlay) return;
+    [UIView animateWithDuration:0.2 animations:^{
+        self.nowPlayingOverlay.alpha = 0.0;
+    } completion:^(BOOL finished) {
+        [self.nowPlayingOverlay removeFromSuperview];
+        self.nowPlayingOverlay = nil;
+    }];
 }
 
 #pragma mark - ATRCompanionClientDelegate
@@ -579,20 +717,17 @@
 }
 
 - (void)companionClientStateChanged:(NSString *)state {
-    self.marqueeLabel.text = state;
+    if (!self.currentNowPlayingTitle) {
+        self.marqueeLabel.text = state;
+    }
     [self updateStatusUI];
 }
 
 - (void)companionClientReceivedNowPlaying:(NSDictionary *)info {
+    NSLog(@"[ATRRemoteViewController] Received Now Playing event: %@", info);
     NSString *title = [info objectForKey:@"_npT"];
     NSString *artist = [info objectForKey:@"_npA"];
-    if (title && [title length] > 0) {
-        if (artist && [artist length] > 0) {
-            self.marqueeLabel.text = [NSString stringWithFormat:@"%@ • %@", title, artist];
-        } else {
-            self.marqueeLabel.text = title;
-        }
-    }
+    [self applyNowPlayingTitle:title artist:artist];
 }
 
 @end

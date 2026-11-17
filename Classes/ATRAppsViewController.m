@@ -1,6 +1,7 @@
 #import "ATRAppsViewController.h"
 #import "Companion/ATRCompanionClient.h"
 #import "ATRClient.h"
+#import "ATRIconProvider.h"
 #import <AudioToolbox/AudioToolbox.h>
 #import <QuartzCore/QuartzCore.h>
 
@@ -267,6 +268,7 @@ static NSString * const kATRCachedAppsPrefKey = @"ATRCachedLaunchableApps";
         cell.textLabel.text = @"Connecting to Apple TV...";
         cell.detailTextLabel.text = @"Fetching launchable application list";
         cell.accessoryType = UITableViewCellAccessoryNone;
+        cell.imageView.image = [ATRIconProvider defaultThumbnailForMediaTitle:nil artist:nil];
         return cell;
     }
     
@@ -277,9 +279,16 @@ static NSString * const kATRCachedAppsPrefKey = @"ATRCachedLaunchableApps";
         entry = [self.appList objectAtIndex:indexPath.row];
     }
     
-    cell.textLabel.text = [entry objectForKey:@"name"];
-    cell.detailTextLabel.text = [entry objectForKey:@"bundleID"];
+    NSString *bundleID = [entry objectForKey:@"bundleID"];
+    NSString *name = [entry objectForKey:@"name"];
+    cell.textLabel.text = name;
+    cell.detailTextLabel.text = bundleID;
     cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    
+    // Set custom rendered icon badge
+    cell.imageView.image = [ATRIconProvider iconForBundleID:bundleID name:name size:CGSizeMake(34, 34)];
+    cell.imageView.layer.cornerRadius = 6.0;
+    cell.imageView.layer.masksToBounds = YES;
     return cell;
 }
 

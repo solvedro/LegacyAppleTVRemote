@@ -35,6 +35,6 @@ jobs:
             - One-time PC Python helper (`Tools/atv_bridge.py`) for initial PIN SRP pairing.
           files: |
             dist/AppleTVRemote.ipa
-            dist/ro.solved.appletvremote_1.0.0-1+debug_iphoneos-arm.deb
+            dist/*.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

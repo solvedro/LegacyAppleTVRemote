@@ -23,10 +23,12 @@ Turn your classic iPod touch into a dedicated, premium living-room remote contro
   - **Menu / Back**, **Home / TV**, **Play / Pause**, **Mute**, and **Volume Up / Down**.
 - **Installed App Launcher & Shortcuts (`📱 APPS`):**
   - Queries your Apple TV live for all installed applications (`FetchLaunchableApplicationsEvent`).
-  - Dedicated **App Launcher** sheet displaying all installed apps (YouTube, DIGI TV, Prime Video, Plex, Moonlight, RetroArch, VLC, etc.) sorted alphabetically.
+  - Dedicated **App Launcher** sheet displaying all installed apps with custom crisp app icon thumbnails (YouTube, Netflix, DIGI TV, Prime Video, Plex, Moonlight, RetroArch, VLC, etc.).
   - One-tap direct app launching on your Apple TV (`_launchApp`).
-- **Now Playing Marquee:**
-  - Real-time media info tracking (`_iMC` / `_npI`) displayed on the sleek animated marquee bar.
+- **Now Playing Marquee & Artwork Thumbnails:**
+  - Real-time media info tracking (`_iMC` / `_npI`) displayed on the sleek marquee bar with live thumbnail icon.
+  - Asynchronous dynamic album art / poster thumbnail lookup and caching via iTunes Search API.
+  - Interactive Now Playing card: tap the marquee to pop up full-resolution cover art with track and artist details.
 - **Embedded Modern Cryptography:**
   - Pure-C implementation of RFC 8439 **ChaCha20-Poly1305 AEAD**.
   - **TweetNaCl** Curve25519 ECDH key exchange and Ed25519 signature verification.
