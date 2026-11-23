@@ -1,15 +1,17 @@
 #import "ATRSettingsViewController.h"
 #import "ATRClient.h"
 #import "Companion/ATRCompanionClient.h"
+#import "ATRDeviceDiscovery.h"
 #import <QuartzCore/QuartzCore.h>
 
 static NSString * const kATRConnectionModeKey = @"ATRConnectionMode"; // @"Direct" or @"Bridge"
 
-@interface ATRSettingsViewController () <UITextFieldDelegate, UIAlertViewDelegate>
+@interface ATRSettingsViewController () <UITextFieldDelegate, UIAlertViewDelegate, ATRDeviceDiscoveryDelegate>
 
 @property (nonatomic, strong) UISegmentedControl *modeControl;
 @property (nonatomic, strong) UILabel *addressPromptLabel;
 @property (nonatomic, strong) UITextField *serverField;
+@property (nonatomic, strong) UIButton *bonjourButton;
 @property (nonatomic, strong) UILabel *statusLabel;
 @property (nonatomic, strong) UIButton *testButton;
 @property (nonatomic, strong) UIButton *pairButton;
@@ -42,7 +44,7 @@ static NSString * const kATRConnectionModeKey = @"ATRConnectionMode"; // @"Direc
     UIButton *doneBtn = [UIButton buttonWithType:UIButtonTypeCustom];
     doneBtn.frame = CGRectMake(320 - 70, 7, 60, 30);
     [doneBtn setTitle:@"Done" forState:UIControlStateNormal];
-    [doneBtn setTitleColor:[UIColor colorWithRed:0.35 green:0.75 blue:1.0 alpha:1.0] forState:UIControlStateNormal];
+    [doneBtn setTitleColor:[UIColor colorWithWhite:0.92 alpha:1.0] forState:UIControlStateNormal];
     doneBtn.titleLabel.font = [UIFont boldSystemFontOfSize:14];
     [doneBtn addTarget:self action:@selector(doneTapped) forControlEvents:UIControlEventTouchUpInside];
     [topBar addSubview:doneBtn];
@@ -84,32 +86,38 @@ static NSString * const kATRConnectionModeKey = @"ATRConnectionMode"; // @"Direc
     self.serverField.leftViewMode = UITextFieldViewModeAlways;
     [self.view addSubview:self.serverField];
     
+    // Auto-Discovery Bonjour button
+    self.bonjourButton = [self createStyledButtonWithTitle:@"🔍 Auto-Discover Apple TVs..." frame:CGRectMake(20, 154, 280, 32) color:[UIColor colorWithWhite:0.18 alpha:1.0]];
+    self.bonjourButton.titleLabel.font = [UIFont systemFontOfSize:13];
+    [self.bonjourButton addTarget:self action:@selector(bonjourTapped) forControlEvents:UIControlEventTouchUpInside];
+    [self.view addSubview:self.bonjourButton];
+    
     // Status text
-    self.statusLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, 154, 280, 36)];
+    self.statusLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, 190, 280, 26)];
     self.statusLabel.numberOfLines = 2;
     self.statusLabel.textColor = [UIColor colorWithWhite:0.7 alpha:1.0];
-    self.statusLabel.font = [UIFont systemFontOfSize:12];
+    self.statusLabel.font = [UIFont systemFontOfSize:11];
     self.statusLabel.textAlignment = UITextAlignmentCenter;
     self.statusLabel.backgroundColor = [UIColor clearColor];
     [self.view addSubview:self.statusLabel];
     
     // Test Connection Button
-    self.testButton = [self createStyledButtonWithTitle:@"Test Connection" frame:CGRectMake(20, 194, 280, 38) color:[UIColor colorWithWhite:0.22 alpha:1.0]];
+    self.testButton = [self createStyledButtonWithTitle:@"Test Connection" frame:CGRectMake(20, 218, 280, 36) color:[UIColor colorWithWhite:0.22 alpha:1.0]];
     [self.testButton addTarget:self action:@selector(testTapped) forControlEvents:UIControlEventTouchUpInside];
     [self.view addSubview:self.testButton];
     
     // Pair Button
-    self.pairButton = [self createStyledButtonWithTitle:@"Pair with Apple TV 4K" frame:CGRectMake(20, 238, 280, 38) color:[UIColor colorWithRed:0.20 green:0.55 blue:0.90 alpha:1.0]];
+    self.pairButton = [self createStyledButtonWithTitle:@"Pair with Apple TV 4K" frame:CGRectMake(20, 258, 280, 36) color:[UIColor colorWithRed:0.20 green:0.55 blue:0.90 alpha:1.0]];
     [self.pairButton addTarget:self action:@selector(pairTapped) forControlEvents:UIControlEventTouchUpInside];
     [self.view addSubview:self.pairButton];
     
     // Import Button (Direct Mode)
-    self.importButton = [self createStyledButtonWithTitle:@"Import Keys from Bridge" frame:CGRectMake(20, 282, 280, 38) color:[UIColor colorWithRed:0.25 green:0.40 blue:0.60 alpha:1.0]];
+    self.importButton = [self createStyledButtonWithTitle:@"Import Keys from Bridge" frame:CGRectMake(20, 298, 280, 36) color:[UIColor colorWithRed:0.25 green:0.40 blue:0.60 alpha:1.0]];
     [self.importButton addTarget:self action:@selector(importTapped) forControlEvents:UIControlEventTouchUpInside];
     [self.view addSubview:self.importButton];
     
     // Info footer
-    self.footerLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, 328, 280, 140)];
+    self.footerLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, 338, 280, 130)];
     self.footerLabel.numberOfLines = 7;
     self.footerLabel.textColor = [UIColor colorWithWhite:0.55 alpha:1.0];
     self.footerLabel.font = [UIFont systemFontOfSize:11];
@@ -122,6 +130,57 @@ static NSString * const kATRConnectionModeKey = @"ATRConnectionMode"; // @"Direc
     [self.view addSubview:self.spinner];
     
     [self updateUIForMode];
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    [ATRDeviceDiscovery sharedDiscovery].delegate = self;
+    [[ATRDeviceDiscovery sharedDiscovery] startDiscovery];
+}
+
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+    [[ATRDeviceDiscovery sharedDiscovery] stopDiscovery];
+}
+
+- (void)bonjourTapped {
+    NSArray *devs = [[ATRDeviceDiscovery sharedDiscovery] discoveredDevices];
+    ATRDiscoveredDevice *selected = nil;
+    for (ATRDiscoveredDevice *d in devs) {
+        if ([d.name rangeOfString:@"Apple" options:NSCaseInsensitiveSearch].location != NSNotFound ||
+            [d.name rangeOfString:@"Living Room" options:NSCaseInsensitiveSearch].location != NSNotFound ||
+            [d.host isEqualToString:@"192.168.100.155"]) {
+            selected = d;
+            break;
+        }
+    }
+    if (!selected && [devs count] > 0) {
+        selected = [devs objectAtIndex:0];
+    }
+    
+    if (selected) {
+        self.serverField.text = selected.host;
+        self.statusLabel.text = [NSString stringWithFormat:@"Selected: %@ (%@)", selected.name, selected.host];
+        self.statusLabel.textColor = [UIColor colorWithRed:0.35 green:1.0 blue:0.5 alpha:1.0];
+        [self testTapped];
+    } else {
+        self.serverField.text = @"192.168.100.155";
+        self.statusLabel.text = @"Searching for Apple TV on Wi-Fi...";
+        [[ATRDeviceDiscovery sharedDiscovery] startDiscovery];
+    }
+}
+
+#pragma mark - ATRDeviceDiscoveryDelegate
+
+- (void)deviceDiscovery:(ATRDeviceDiscovery *)discovery didFindDeviceNamed:(NSString *)name host:(NSString *)host port:(NSInteger)port {
+    NSString *btnTitle = [NSString stringWithFormat:@"✨ Found: %@ (%@)", name, host];
+    [self.bonjourButton setTitle:btnTitle forState:UIControlStateNormal];
+    [self.bonjourButton setTitleColor:[UIColor colorWithRed:0.35 green:1.0 blue:0.5 alpha:1.0] forState:UIControlStateNormal];
+    self.bonjourButton.layer.borderColor = [UIColor colorWithRed:0.35 green:1.0 blue:0.5 alpha:0.7].CGColor;
+    
+    if ([self.serverField.text length] == 0) {
+        self.serverField.text = host;
+    }
 }
 
 - (UIButton *)createStyledButtonWithTitle:(NSString *)title frame:(CGRect)frame color:(UIColor *)color {
@@ -156,12 +215,13 @@ static NSString * const kATRConnectionModeKey = @"ATRConnectionMode"; // @"Direc
         self.statusLabel.textColor = paired ? [UIColor colorWithRed:0.4 green:1.0 blue:0.5 alpha:1.0] : [UIColor colorWithWhite:0.7 alpha:1.0];
         
         [self.pairButton setTitle:@"Pair with Apple TV 4K" forState:UIControlStateNormal];
-        self.importButton.hidden = YES; // Auto-pairing handles key import automatically
+        self.importButton.hidden = NO;
+        [self.importButton setTitle:@"Import Keys from Bridge" forState:UIControlStateNormal];
         
         self.footerLabel.text = @"Standalone Direct Mode:\n"
-                                @"• iPod connects directly to Apple TV port 50590.\n"
+                                @"• iPhone connects directly to Apple TV port 50590.\n"
                                 @"• Full on-device RFC 8439 ChaCha20-Poly1305 encryption.\n"
-                                @"• Tap 'Pair with Apple TV 4K' to pair with the on-screen PIN.\n"
+                                @"• Tap 'Pair with Apple TV 4K' or 'Import Keys from Bridge'.\n"
                                 @"• Once paired, no PC or server is needed!";
     } else {
         self.addressPromptLabel.text = @"Bridge Server Address (Host:Port):";
@@ -182,6 +242,11 @@ static NSString * const kATRConnectionModeKey = @"ATRConnectionMode"; // @"Direc
 - (void)doneTapped {
     [self saveAddress];
     [self.serverField resignFirstResponder];
+    if (self.modeControl.selectedSegmentIndex == 0) {
+        if ([[ATRCompanionClient sharedClient] isPaired]) {
+            [[ATRCompanionClient sharedClient] connect];
+        }
+    }
     if (self.delegate && [self.delegate respondsToSelector:@selector(settingsDidDismiss)]) {
         [self.delegate settingsDidDismiss];
     } else {
@@ -261,7 +326,15 @@ static NSString * const kATRConnectionModeKey = @"ATRConnectionMode"; // @"Direc
     [[ATRCompanionClient sharedClient] importCredentialsFromBridge:bridgeUrl completion:^(BOOL success, NSString *msg) {
         [self.spinner stopAnimating];
         if (success) {
-            self.statusLabel.text = @"SUCCESS: Keys imported!\niPod is now standalone paired.";
+            [ATRCompanionClient sharedClient].host = @"192.168.100.155";
+            [ATRCompanionClient sharedClient].port = 50590;
+            [[NSUserDefaults standardUserDefaults] setObject:@"192.168.100.155" forKey:@"ATRCompanionHost"];
+            [[NSUserDefaults standardUserDefaults] setInteger:50590 forKey:@"ATRCompanionPort"];
+            [[NSUserDefaults standardUserDefaults] synchronize];
+            [[ATRCompanionClient sharedClient] connect];
+            
+            self.serverField.text = @"192.168.100.155";
+            self.statusLabel.text = @"SUCCESS: Keys imported!\nApple TV 4K is connected directly.";
             self.statusLabel.textColor = [UIColor colorWithRed:0.4 green:1.0 blue:0.5 alpha:1.0];
         } else {
             self.statusLabel.text = [NSString stringWithFormat:@"Import failed:\n%@", msg];

@@ -17,6 +17,7 @@ extern NSString *const kATRNowPlayingChangedNotification;
 
 - (void)saveServerHost:(NSString *)host;
 - (void)pressKey:(NSString *)key completion:(void (^)(BOOL success, NSString *error))completion;
+- (void)sendTextInput:(NSString *)text completion:(void (^)(BOOL success, NSString *error))completion;
 - (void)fetchStatusWithCompletion:(void (^)(BOOL connected, BOOL paired, NSString *device, NSString *error))completion;
 - (void)fetchNowPlayingWithCompletion:(void (^)(NSDictionary *info, NSString *error))completion;
 - (void)startPairingWithCompletion:(void (^)(BOOL success, NSString *msg))completion;

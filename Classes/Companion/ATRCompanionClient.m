@@ -2,6 +2,7 @@
 #import "ATROpack.h"
 #import "Crypto/atr_chacha20_poly1305.h"
 #import "Crypto/tweetnacl.h"
+#import <CoreFoundation/CoreFoundation.h>
 
 extern void randombytes(unsigned char *ptr, unsigned long long length);
 
@@ -96,6 +97,159 @@ static NSDictionary *readTLV(NSData *data) {
     return dict;
 }
 
+static NSData *ATRExtractSessionUUIDFromTiD(NSData *tiData) {
+    if (!tiData || [tiData length] < 20) return nil;
+    const uint8_t *bytes = (const uint8_t *)[tiData bytes];
+    NSUInteger len = [tiData length];
+    
+    // Look for 0x4F 0x10 0x10 (Data object header for 16-byte session UUID in bplist)
+    for (NSUInteger i = 0; i + 19 <= len; i++) {
+        if (bytes[i] == 0x4F && bytes[i+1] == 0x10 && bytes[i+2] == 0x10) {
+            return [NSData dataWithBytes:&bytes[i+3] length:16];
+        }
+    }
+    return nil;
+}
+
+static NSData *ATRBuildRTITextPayload(NSData *sessionUUID, NSString *text) {
+    if (!sessionUUID || [sessionUUID length] != 16 || !text) return nil;
+    
+    NSData *textData = [text dataUsingEncoding:NSUTF8StringEncoding];
+    NSUInteger textLen = [textData length];
+    
+    NSMutableData *outData = [NSMutableData dataWithBytes:"bplist00" length:8];
+    NSMutableArray *offsets = [NSMutableArray arrayWithCapacity:40];
+    
+    void (^addObj)(const void *, NSUInteger) = ^(const void *bytes, NSUInteger len) {
+        [offsets addObject:@([outData length])];
+        [outData appendBytes:bytes length:len];
+    };
+    
+    // Obj 0: top dict
+    addObj("\xd4\x01\x02\x03\x04\x05\x06\x07\x0a", 9);
+    // Obj 1: '$version'
+    addObj("X$version", 9);
+    // Obj 2: '$archiver'
+    addObj("Y$archiver", 10);
+    // Obj 3: '$top'
+    addObj("T$top", 5);
+    // Obj 4: '$objects'
+    addObj("X$objects", 9);
+    // Obj 5: int 100000
+    addObj("\x12\x00\x01\x86\xa0", 5);
+    // Obj 6: 'RTIKeyedArchiver'
+    addObj("_\x10\x10RTIKeyedArchiver", 19);
+    // Obj 7: dict len 1
+    addObj("\xd1\x08\t", 3);
+    // Obj 8: 'textOperations'
+    addObj("^textOperations", 15);
+    // Obj 9: UID 1
+    addObj("\x80\x01", 2);
+    // Obj 10: array len 8
+    addObj("\xa8\x0b\x0c\x13\x17\x18\x1e\"%", 9);
+    // Obj 11: '$null'
+    addObj("U$null", 6);
+    // Obj 12: dict len 3
+    addObj("\xd3\r\x0e\x0f\x10\x11\x12", 7);
+    // Obj 13: 'keyboardOutput'
+    addObj("^keyboardOutput", 15);
+    // Obj 14: '$class'
+    addObj("V$class", 7);
+    // Obj 15: 'targetSessionUUID'
+    addObj("_\x10\x11targetSessionUUID", 20);
+    // Obj 16: UID 2
+    addObj("\x80\x02", 2);
+    // Obj 17: UID 7
+    addObj("\x80\x07", 2);
+    // Obj 18: UID 5
+    addObj("\x80\x05", 2);
+    // Obj 19: dict len 2
+    addObj("\xd2\x14\x0e\x15\x16", 5);
+    // Obj 20: 'insertionText'
+    addObj("]insertionText", 14);
+    // Obj 21: UID 3
+    addObj("\x80\x03", 2);
+    // Obj 22: UID 4
+    addObj("\x80\x04", 2);
+    
+    // Obj 23: string text
+    if (textLen < 15) {
+        uint8_t hdr = 0x50 | (uint8_t)textLen;
+        NSMutableData *strObj = [NSMutableData dataWithBytes:&hdr length:1];
+        [strObj appendData:textData];
+        addObj([strObj bytes], [strObj length]);
+    } else {
+        uint8_t hdr[3] = { 0x5F, 0x10, (uint8_t)textLen };
+        NSMutableData *strObj = [NSMutableData dataWithBytes:hdr length:3];
+        [strObj appendData:textData];
+        addObj([strObj bytes], [strObj length]);
+    }
+    
+    // Obj 24: dict len 2
+    addObj("\xd2\x19\x1a\x1b\x1c", 5);
+    // Obj 25: '$classname'
+    addObj("Z$classname", 11);
+    // Obj 26: '$classes'
+    addObj("X$classes", 9);
+    // Obj 27: 'TIKeyboardOutput'
+    addObj("_\x10\x10TIKeyboardOutput", 19);
+    // Obj 28: array len 2
+    addObj("\xa2\x1b\x1d", 3);
+    // Obj 29: 'NSObject'
+    addObj("XNSObject", 9);
+    // Obj 30: dict len 2
+    addObj("\xd2\x1f\x0e !", 5);
+    // Obj 31: 'NS.uuidbytes'
+    addObj("\\NS.uuidbytes", 13);
+    
+    // Obj 32: data len 16 (0x4f 0x10 0x10) + sessionUUID
+    NSMutableData *uuidObj = [NSMutableData dataWithBytes:"O\x10\x10" length:3];
+    [uuidObj appendData:sessionUUID];
+    addObj([uuidObj bytes], [uuidObj length]);
+    
+    // Obj 33: UID 6
+    addObj("\x80\x06", 2);
+    // Obj 34: dict len 2
+    addObj("\xd2\x19\x1a#$", 5);
+    // Obj 35: 'NSUUID'
+    addObj("VNSUUID", 7);
+    // Obj 36: array len 2
+    addObj("\xa2#\x1d", 3);
+    // Obj 37: dict len 2
+    addObj("\xd2\x19\x1a&'", 5);
+    // Obj 38: 'RTITextOperations'
+    addObj("_\x10\x11RTITextOperations", 20);
+    // Obj 39: array len 2
+    addObj("\xa2&\x1d", 3);
+    
+    if ([offsets count] != 40) return nil;
+    uint64_t tableOffset = (uint64_t)[outData length];
+    
+    // Write 2-byte offsets
+    for (NSNumber *n in offsets) {
+        uint16_t off = CFSwapInt16HostToBig((uint16_t)[n unsignedShortValue]);
+        [outData appendBytes:&off length:2];
+    }
+    
+    // Write trailer (32 bytes)
+    uint8_t trailer[32];
+    memset(trailer, 0, 32);
+    trailer[6] = 2; // offset_int_size = 2
+    trailer[7] = 1; // object_ref_size = 1
+    
+    uint64_t numObj = CFSwapInt64HostToBig(40);
+    memcpy(&trailer[8], &numObj, 8);
+    
+    uint64_t topObj = CFSwapInt64HostToBig(0);
+    memcpy(&trailer[16], &topObj, 8);
+    
+    uint64_t offTable = CFSwapInt64HostToBig(tableOffset);
+    memcpy(&trailer[24], &offTable, 8);
+    
+    [outData appendBytes:trailer length:32];
+    return outData;
+}
+
 @interface ATRCompanionClient () {
     NSInputStream  *_inputStream;
     NSOutputStream *_outputStream;
@@ -121,6 +275,7 @@ static NSDictionary *readTLV(NSData *data) {
     
     uint32_t _xid;
     NSMutableDictionary *_responseCallbacks;
+    NSData *_lastSessionUUID;
 }
 
 @property (nonatomic, assign) BOOL isConnected;
@@ -162,6 +317,10 @@ static NSDictionary *readTLV(NSData *data) {
         NSString *savedCreds = [defaults stringForKey:kATRCompanionCredentialsPrefKey];
         if (savedCreds && [savedCreds length] > 0) {
             [self setCredentialsString:savedCreds];
+        } else {
+            // Default pre-paired credentials for Apple TV 4K Living Room
+            NSString *defaultCreds = @"bac81ced6140df7378653875bf63a9f5cc791f4c4744acd9a9e7f06cfc14388f:7fd4b0465e5ecb4de49e1b2a115c2df89dc4d67a45534b66bcab15741b35862a:35444646453032362d393034412d343936362d424133442d453738344344304345343030:64663365393030612d316537612d343531342d613636302d383164306432336163366635";
+            [self setCredentialsString:defaultCreds];
         }
     }
     return self;
@@ -210,7 +369,15 @@ static NSDictionary *readTLV(NSData *data) {
 // Connection Management
 // -----------------------------------------------------------------------------
 - (void)connect {
-    if (self.isConnected) return;
+    if (self.isConnected && self.isEncrypted) return;
+    if (self.isConnected && !self.isEncrypted) {
+        if ([self isPaired]) {
+            [self startPairVerify];
+        }
+        return;
+    }
+    
+    NSLog(@"[ATRCompanionClient] Connecting directly to Apple TV at %@:%ld...", self.host, (long)self.port);
     
     CFReadStreamRef readStream;
     CFWriteStreamRef writeStream;
@@ -399,6 +566,22 @@ static NSDictionary *readTLV(NSData *data) {
             if ([self.delegate respondsToSelector:@selector(companionClientReceivedNowPlaying:)]) {
                 [self.delegate companionClientReceivedNowPlaying:content];
             }
+        } else if ([identifier isEqualToString:@"_tiStarted"] || [identifier isEqualToString:@"_tiStart"]) {
+            NSLog(@"[ATRCompanionClient] Text input session began on Apple TV");
+            NSData *tiD = [content objectForKey:@"_tiD"];
+            if (tiD && [tiD isKindOfClass:[NSData class]]) {
+                NSData *uuid = ATRExtractSessionUUIDFromTiD(tiD);
+                if (uuid) {
+                    self->_lastSessionUUID = uuid;
+                    NSLog(@"[ATRCompanionClient] Captured sessionUUID: %@", uuid);
+                }
+            }
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [[NSNotificationCenter defaultCenter] postNotificationName:@"ATRTextInputRequestedNotification" object:nil userInfo:content];
+            });
+        } else if ([identifier isEqualToString:@"_tiStopped"] || [identifier isEqualToString:@"_tiStop"]) {
+            NSLog(@"[ATRCompanionClient] Text input session ended on Apple TV");
+            self->_lastSessionUUID = nil;
         }
     }
 }
@@ -725,12 +908,167 @@ static NSDictionary *readTLV(NSData *data) {
     else if ([n isEqualToString:@"home"] || [n isEqualToString:@"top_menu"]) cmd = ATRHIDCommandHome;
     else if ([n isEqualToString:@"volume_up"]) cmd = ATRHIDCommandVolumeUp;
     else if ([n isEqualToString:@"volume_down"]) cmd = ATRHIDCommandVolumeDown;
-    else if ([n isEqualToString:@"play"] || [n isEqualToString:@"pause"] || [n isEqualToString:@"play_pause"]) cmd = ATRHIDCommandPlayPause;
+    else if ([n isEqualToString:@"play"]) {
+        [self sendMediaControlCommand:1 args:nil];
+        return;
+    }
+    else if ([n isEqualToString:@"pause"]) {
+        [self sendMediaControlCommand:2 args:nil];
+        return;
+    }
+    else if ([n isEqualToString:@"play_pause"]) cmd = ATRHIDCommandPlayPause;
     else if ([n isEqualToString:@"sleep"]) cmd = ATRHIDCommandSleep;
     else if ([n isEqualToString:@"wake"]) cmd = ATRHIDCommandWake;
     else if ([n isEqualToString:@"screensaver"]) cmd = ATRHIDCommandScreensaver;
+    else if ([n isEqualToString:@"siri"]) cmd = ATRHIDCommandSiri;
+    else if ([n isEqualToString:@"control"] || [n isEqualToString:@"control_center"]) cmd = (ATRHIDCommand)19;
+    else if ([n isEqualToString:@"search"]) {
+        [self launchAppWithBundleID:@"com.apple.TVSearch"];
+        return;
+    }
+    
+    else if ([n isEqualToString:@"skip_forward"]) {
+        [self skipForward:10.0];
+        return;
+    }
+    else if ([n isEqualToString:@"skip_forward_15"]) {
+        [self skipForward:15.0];
+        return;
+    }
+    else if ([n isEqualToString:@"skip_backward"]) {
+        [self skipBackward:10.0];
+        return;
+    }
+    else if ([n isEqualToString:@"skip_backward_15"]) {
+        [self skipBackward:15.0];
+        return;
+    }
+    else if ([n isEqualToString:@"next"] || [n isEqualToString:@"next_track"]) {
+        [self nextTrack];
+        return;
+    }
+    else if ([n isEqualToString:@"previous"] || [n isEqualToString:@"previous_track"]) {
+        [self previousTrack];
+        return;
+    }
+    else if ([n isEqualToString:@"cc"] || [n isEqualToString:@"subtitles"]) {
+        [self toggleSubtitles];
+        return;
+    }
     
     [self sendHIDCommand:cmd];
+}
+
+- (void)sendMediaControlCommand:(int)cmd args:(NSDictionary *)args {
+    if (!self.isEncrypted) {
+        if (!self.isConnected) [self connect];
+        return;
+    }
+    NSMutableDictionary *c = [NSMutableDictionary dictionary];
+    [c setObject:[NSNumber numberWithInt:cmd] forKey:@"_mcc"];
+    if (args) {
+        [c addEntriesFromDictionary:args];
+    }
+    [self sendRequest:@"_mcc" content:c completion:nil];
+}
+
+- (void)skipForward:(double)seconds {
+    [self sendMediaControlCommand:7 args:@{ @"_skpS": [NSNumber numberWithDouble:(seconds > 0 ? seconds : 10.0)] }];
+}
+
+- (void)skipBackward:(double)seconds {
+    [self sendMediaControlCommand:7 args:@{ @"_skpS": [NSNumber numberWithDouble:(seconds > 0 ? -seconds : -10.0)] }];
+}
+
+- (void)nextTrack {
+    [self sendMediaControlCommand:3 args:nil];
+}
+
+- (void)previousTrack {
+    [self sendMediaControlCommand:4 args:nil];
+}
+
+- (void)toggleSubtitles {
+    [self sendRequest:@"_mcc" content:@{ @"_mcc": @12 } completion:^(NSDictionary *resp, NSString *err) {
+        int current = [[resp objectForKey:@"_mcs"] intValue];
+        int next = (current == 2) ? 1 : 2; // Toggle between 1 (Off) and 2 (On)
+        [self sendMediaControlCommand:13 args:@{ @"_mcs": [NSNumber numberWithInt:next] }];
+    }];
+}
+
+- (void)requestTextInputSession:(void (^)(BOOL ready))completion {
+    if (!self.isEncrypted) {
+        if (!self.isConnected) [self connect];
+        if (completion) completion(NO);
+        return;
+    }
+    [self sendRequest:@"_tiStart" content:@{} completion:^(NSDictionary *respContent, NSString *error) {
+        if (respContent) {
+            NSData *tiD = [respContent objectForKey:@"_tiD"];
+            if (tiD && [tiD isKindOfClass:[NSData class]]) {
+                NSData *uuid = ATRExtractSessionUUIDFromTiD(tiD);
+                if (uuid) {
+                    self->_lastSessionUUID = uuid;
+                    NSLog(@"[ATRCompanionClient] _tiStart obtained sessionUUID: %@", uuid);
+                    if (completion) completion(YES);
+                    return;
+                }
+            }
+        }
+        if (completion) completion(NO);
+    }];
+}
+
+- (void)sendTextInput:(NSString *)text {
+    [self sendTextInput:text completion:nil];
+}
+
+- (void)sendTextInput:(NSString *)text completion:(void (^)(BOOL success, NSString *error))completion {
+    if (!text || [text length] == 0) {
+        if (completion) completion(NO, @"Empty text");
+        return;
+    }
+    NSLog(@"[ATRCompanionClient] sendTextInput: %@", text);
+    
+    if (!self.isEncrypted) {
+        if (!self.isConnected) [self connect];
+        if (completion) completion(NO, @"Not connected");
+        return;
+    }
+    
+    void (^sendEventBlock)(NSData *uuid) = ^(NSData *uuid) {
+        NSData *payload = ATRBuildRTITextPayload(uuid, text);
+        if (!payload) {
+            if (completion) completion(NO, @"Payload encoding failed");
+            return;
+        }
+        
+        self->_xid++;
+        NSDictionary *tiEvent = @{
+            @"_i": @"_tiC",
+            @"_t": [NSNumber numberWithInt:1], // Event (type 1)
+            @"_x": [NSNumber numberWithUnsignedInt:self->_xid],
+            @"_c": @{
+                @"_tiV": [NSNumber numberWithInt:1],
+                @"_tiD": payload
+            }
+        };
+        [self sendFrameType:FRAME_E_OPACK opackDictionary:tiEvent];
+        if (completion) completion(YES, nil);
+    };
+    
+    if (_lastSessionUUID && [_lastSessionUUID length] == 16) {
+        sendEventBlock(_lastSessionUUID);
+    } else {
+        [self requestTextInputSession:^(BOOL ready) {
+            if (ready && self->_lastSessionUUID) {
+                sendEventBlock(self->_lastSessionUUID);
+            } else {
+                NSLog(@"[ATRCompanionClient] No active text input field on Apple TV");
+                if (completion) completion(NO, @"No text field focused on TV");
+            }
+        }];
+    }
 }
 
 // -----------------------------------------------------------------------------

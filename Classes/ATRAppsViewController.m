@@ -43,7 +43,7 @@ static NSString * const kATRCachedAppsPrefKey = @"ATRCachedLaunchableApps";
     UIButton *doneBtn = [UIButton buttonWithType:UIButtonTypeCustom];
     doneBtn.frame = CGRectMake(252, 8, 60, 32);
     [doneBtn setTitle:@"Done" forState:UIControlStateNormal];
-    [doneBtn setTitleColor:[UIColor colorWithRed:0.35 green:0.75 blue:1.0 alpha:1.0] forState:UIControlStateNormal];
+    [doneBtn setTitleColor:[UIColor colorWithWhite:0.92 alpha:1.0] forState:UIControlStateNormal];
     doneBtn.titleLabel.font = [UIFont boldSystemFontOfSize:15];
     [doneBtn addTarget:self action:@selector(doneTapped) forControlEvents:UIControlEventTouchUpInside];
     [topBar addSubview:doneBtn];
@@ -64,7 +64,9 @@ static NSString * const kATRCachedAppsPrefKey = @"ATRCachedLaunchableApps";
     [topBar addSubview:self.spinner];
     
     // Table View
-    self.tableView = [[UITableView alloc] initWithFrame:CGRectMake(0, 48, 320, 480 - 48) style:UITableViewStylePlain];
+    CGFloat screenH = self.view.bounds.size.height;
+    self.tableView = [[UITableView alloc] initWithFrame:CGRectMake(0, 48, 320, screenH - 48) style:UITableViewStylePlain];
+    self.tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     self.tableView.backgroundColor = [UIColor colorWithWhite:0.09 alpha:1.0];
     self.tableView.separatorColor = [UIColor colorWithWhite:0.20 alpha:1.0];
     self.tableView.dataSource = self;
@@ -316,7 +318,7 @@ static NSString * const kATRCachedAppsPrefKey = @"ATRCachedLaunchableApps";
         NSURL *url = [NSURL URLWithString:urlStr];
         if (url) {
             NSURLRequest *req = [NSURLRequest requestWithURL:url];
-            [NSURLConnection sendAsynchronousRequest:req queue:[NSOperationQueue mainQueue] completionHandler:nil];
+            [NSURLConnection sendAsynchronousRequest:req queue:[NSOperationQueue mainQueue] completionHandler:^(NSURLResponse *r, NSData *d, NSError *e){}];
         }
     } else {
         [[ATRCompanionClient sharedClient] launchAppWithBundleID:bundleID];

@@ -89,7 +89,7 @@
     else if ([direction isEqualToString:@"right"]) target = self.arrowRight;
     
     if (target) {
-        target.textColor = [UIColor colorWithRed:0.35 green:0.85 blue:1.0 alpha:1.0];
+        target.textColor = [UIColor whiteColor];
         [UIView animateWithDuration:0.25 animations:^{
             target.textColor = [UIColor colorWithWhite:0.55 alpha:1.0];
         }];
@@ -97,7 +97,7 @@
 }
 
 - (void)flashCenterSelect {
-    self.centerSelectView.backgroundColor = [UIColor colorWithRed:0.20 green:0.45 blue:0.75 alpha:1.0];
+    self.centerSelectView.backgroundColor = [UIColor colorWithWhite:0.35 alpha:1.0];
     self.centerLabel.textColor = [UIColor whiteColor];
     [UIView animateWithDuration:0.20 animations:^{
         self.centerSelectView.backgroundColor = [UIColor colorWithWhite:0.18 alpha:1.0];

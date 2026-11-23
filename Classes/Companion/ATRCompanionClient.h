@@ -41,6 +41,15 @@ typedef NS_ENUM(NSInteger, ATRHIDCommand) {
 
 - (void)sendHIDCommand:(ATRHIDCommand)command;
 - (void)sendHIDCommandNamed:(NSString *)name;
+- (void)sendTextInput:(NSString *)text;
+- (void)sendTextInput:(NSString *)text completion:(void (^)(BOOL success, NSString *error))completion;
+
+// Media & Playback Controls
+- (void)skipForward:(double)seconds;
+- (void)skipBackward:(double)seconds;
+- (void)nextTrack;
+- (void)previousTrack;
+- (void)toggleSubtitles;
 
 // Credentials
 - (void)setCredentialsString:(NSString *)creds;

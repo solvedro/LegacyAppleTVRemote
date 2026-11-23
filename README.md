@@ -2,7 +2,7 @@
 
 [![iOS 5.1.1 Compatible](https://img.shields.io/badge/iOS-5.0%20--%206.1.6-lightgrey.svg)](https://github.com/solvedro/LegacyAppleTVRemote)
 [![tvOS Compatibility](https://img.shields.io/badge/tvOS-13.0%20--%2018.x+-blue.svg)](https://github.com/solvedro/LegacyAppleTVRemote)
-[![Architecture](https://img.shields.io/badge/Architecture-armv7%20%7C%20Objective--C-orange.svg)](https://github.com/solvedro/LegacyAppleTVRemote)
+[![Architecture](https://img.shields.io/badge/Architecture-armv7%20%7C%20arm64%20%7C%20Objective--C-orange.svg)](https://github.com/solvedro/LegacyAppleTVRemote)
 [![Crypto](https://img.shields.io/badge/Crypto-TweetNaCl%20%7C%20ChaCha20--Poly1305-green.svg)](https://github.com/solvedro/LegacyAppleTVRemote)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -34,6 +34,10 @@ Turn your classic iPod touch into a dedicated, premium living-room remote contro
   - Real-time media info tracking (`_iMC` / `_npI`) displayed on the sleek marquee bar with live thumbnail icon.
   - Asynchronous dynamic album art / poster thumbnail lookup and caching via iTunes Search API.
   - Interactive Now Playing card: tap the marquee to pop up full-resolution cover art with track and artist details.
+- **Automatic Bonjour Device Discovery:**
+  - Automatically discovers local Apple TVs via Bonjour (`_companion-link._tcp` & `_airplay._tcp`) with manual IP / port fallback.
+- **Reverse Portrait Orientation:**
+  - Full support for both normal and upside-down (reverse portrait) orientations, enabling convenient use when resting on a bed or table while charging or using top/bottom audio jacks.
 - **Embedded Modern Cryptography:**
   - Pure-C implementation of RFC 8439 **ChaCha20-Poly1305 AEAD**.
   - **TweetNaCl** Curve25519 ECDH key exchange and Ed25519 signature verification.
@@ -85,7 +89,7 @@ Turn your classic iPod touch into a dedicated, premium living-room remote contro
 
 Ready-to-install packages are available on the [Releases](https://github.com/solvedro/LegacyAppleTVRemote/releases) page or directly in the [`dist/`](dist/) folder:
 - [**`AppleTVRemote.ipa`**](dist/AppleTVRemote.ipa) — Standard application bundle.
-- [**`ro.solved.appletvremote_*.deb`**](dist/ro.solved.appletvremote_1.0.0-1+debug_iphoneos-arm.deb) — Cydia / Debian package.
+- [**`ro.solved.appletvremote_*.deb`**](dist/ro.solved.appletvremote_1.0.0-5+debug_iphoneos-arm.deb) — Cydia / Debian package.
 
 ### 1. Device & Firmware Prerequisites
 - **Supported Devices:** iPod touch (3rd & 4th gen), iPhone (3GS, 4, 4S), iPad (1st, 2nd gen).

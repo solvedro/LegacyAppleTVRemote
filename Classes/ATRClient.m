@@ -63,6 +63,39 @@ static NSString *const kPrefServerHost = @"ATR_ServerHost";
     return [NSURL URLWithString:h];
 }
 
+- (void)sendTextInput:(NSString *)text completion:(void (^)(BOOL success, NSString *error))completion {
+    if (!text || text.length == 0) return;
+    
+    NSString *escaped = [text stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
+    NSString *urlStr = [NSString stringWithFormat:@"%@/text?text=%@", [self baseURL].absoluteString, escaped];
+    NSURL *url = [NSURL URLWithString:urlStr];
+    if (!url) {
+        if (completion) completion(NO, @"Invalid URL");
+        return;
+    }
+    
+    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url
+                                                       cachePolicy:NSURLRequestReloadIgnoringLocalCacheData
+                                                   timeoutInterval:5.0];
+    
+    [NSURLConnection sendAsynchronousRequest:req
+                                       queue:[NSOperationQueue mainQueue]
+                           completionHandler:^(NSURLResponse *resp, NSData *data, NSError *err) {
+        if (err || !data) {
+            if (completion) completion(NO, [err localizedDescription] ?: @"No data received");
+            return;
+        }
+        
+        NSDictionary *dict = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+        if (dict && [[dict objectForKey:@"success"] boolValue]) {
+            if (completion) completion(YES, nil);
+        } else {
+            NSString *msg = [dict objectForKey:@"error"] ?: @"Failed to send text";
+            if (completion) completion(NO, msg);
+        }
+    }];
+}
+
 - (void)pressKey:(NSString *)key completion:(void (^)(BOOL success, NSString *error))completion {
     if (!key || key.length == 0) return;
     
