@@ -1,14 +1,14 @@
 # LegacyAppleTVRemote (PodRemote)
 
-[![iOS 5.1.1 Compatible](https://img.shields.io/badge/iOS-5.0%20--%206.1.6-lightgrey.svg)](https://github.com/solvedro/LegacyAppleTVRemote)
+[![iOS Compatibility](https://img.shields.io/badge/iOS-5.0%20--%2012.x+-lightgrey.svg)](https://github.com/solvedro/LegacyAppleTVRemote)
 [![tvOS Compatibility](https://img.shields.io/badge/tvOS-13.0%20--%2018.x+-blue.svg)](https://github.com/solvedro/LegacyAppleTVRemote)
 [![Architecture](https://img.shields.io/badge/Architecture-armv7%20%7C%20arm64%20%7C%20Objective--C-orange.svg)](https://github.com/solvedro/LegacyAppleTVRemote)
 [![Crypto](https://img.shields.io/badge/Crypto-TweetNaCl%20%7C%20ChaCha20--Poly1305-green.svg)](https://github.com/solvedro/LegacyAppleTVRemote)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A standalone native Apple TV 4K & Apple TV HD remote control application designed for legacy iOS devices (**iPod touch 3rd/4th gen, iPhone 3GS/4/4S, iPad 1/2** running **iOS 5.0 through 6.1.6**).
+A standalone native Apple TV 4K & Apple TV HD remote control application designed for classic and legacy iOS devices (**iPod touch 3rd through 6th gen, iPhone 3GS through iPhone 6/6s, iPad 1/2/3/4 & iPad mini**) running **iOS 5.0 through iOS 12.x+** (universal `armv7` + `arm64`).
 
-Turn your classic iPod touch into a dedicated, premium living-room remote control for modern Apple TV. **No computer or bridge required during normal operation**—the iPod speaks the modern Apple Companion protocol directly to the Apple TV over your local Wi-Fi.
+Turn your classic iPod touch, iPhone, or iPad into a dedicated, premium living-room remote control for modern Apple TV. **No computer or bridge required during normal operation**—the device speaks the modern Apple Companion protocol directly to the Apple TV over your local Wi-Fi.
 
 ---
 
@@ -51,28 +51,28 @@ Turn your classic iPod touch into a dedicated, premium living-room remote contro
 ## 🏛 Architecture
 
 ```
-┌─────────────────────────────────┐
-│     iPod touch 3 / iPhone 4     │
-│          (iOS 5.1.1)            │
-│  ┌───────────────────────────┐  │
-│  │   LegacyAppleTVRemote     │  │
-│  │  ┌─────────────────────┐  │  │
-│  │  │ TweetNaCl + RFC8439 │  │  │
-│  │  │   ChaCha20-Poly1305 │  │  │
-│  │  │   + OPACK Engine    │  │  │
-│  │  └──────────┬──────────┘  │  │
-│  └─────────────┼─────────────┘  │
-└────────────────┼────────────────┘
+┌───────────────────────────────────────────────┐
+│ iPod touch (3-6) / iPhone (3GS-6) / iPad (1-4)│
+│               (iOS 5.0 - 12.x+)               │
+│  ┌─────────────────────────────────────────┐  │
+│  │           LegacyAppleTVRemote           │  │
+│  │  ┌───────────────────────────────────┐  │  │
+│  │  │ TweetNaCl + RFC8439               │  │  │
+│  │  │ ChaCha20-Poly1305 + OPACK         │  │  │
+│  │  │ (Universal armv7 + arm64)         │  │  │
+│  │  └─────────────────┬─────────────────┘  │  │
+│  └────────────────────┼────────────────────┘  │
+└───────────────────────┼───────────────────────┘
                  │ TCP Direct (Port 50590)
                  │ Encrypted Companion Link
                  ▼
-┌─────────────────────────────────┐
-│          Apple TV 4K            │
-│       (tvOS 13 - 18.x+)         │
-│   ┌─────────────────────────┐   │
-│   │        tvremoted        │   │
-│   └─────────────────────────┘   │
-└─────────────────────────────────┘
+┌───────────────────────────────────────────────┐
+│                 Apple TV 4K                   │
+│              (tvOS 13 - 18.x+)                │
+│          ┌─────────────────────────┐          │
+│          │        tvremoted        │          │
+│          └─────────────────────────┘          │
+└───────────────────────────────────────────────┘
 ```
 
 ---
@@ -92,18 +92,20 @@ Ready-to-install packages are available on the [Releases](https://github.com/sol
 - [**`ro.solved.appletvremote_*.deb`**](dist/ro.solved.appletvremote_1.0.0-5+debug_iphoneos-arm.deb) — Cydia / Debian package.
 
 ### 1. Device & Firmware Prerequisites
-- **Supported Devices:** iPod touch (3rd & 4th gen), iPhone (3GS, 4, 4S), iPad (1st, 2nd gen).
-- **Supported Firmware:** iOS 5.0 through iOS 6.1.6.
+- **Tested & Supported Devices:**
+  - **iPod touch:** 3rd, 4th, 5th, and 6th generation.
+  - **iPhone:** iPhone 3GS, iPhone 4, 4S, 5, 5C, 5S, 6, 6 Plus, and subsequent models.
+  - **iPad:** iPad 1st, 2nd, 3rd, 4th gen, iPad Air, iPad mini 1, 2, 3, and later.
+- **Supported Firmware:** **iOS 5.0 through iOS 12.5.7+** (built as a fat universal binary containing both 32-bit `armv7` and 64-bit `arm64` architecture slices).
 
-### 2. Jailbreak & Tweak Requirements
-Why is a jailbreak required?
-> Modern Apple developer certificates and sideloading tools no longer support iOS 5 / 6 legacy code signature validation. A jailbroken device allows running unsigned legacy binaries without expiration or revocation.
-
-- **Jailbreak:** Device must be jailbroken (e.g., using *Absinthe 2.0*, *redsn0w*, or *p0sixspwn* depending on device and iOS version).
-- **AppSync Unified:** Required to install and run the `.ipa` without signature checks.
-  - In Cydia, add repo: `https://cydia.akemi.ai/`
-  - Install **AppSync Unified**.
-- **Apple File Conduit "2" (AFC2)** *(Optional)*: Recommended for direct USB file transfers via 3uTools, iFunBox, or `ifuse`.
+### 2. Jailbreak & Sideloading Requirements
+- **Legacy iOS (iOS 5.0 – 6.1.6):**
+  - Device should be jailbroken (e.g., using *Absinthe*, *redsn0w*, or *p0sixspwn*).
+  - Install **AppSync Unified** (from `https://cydia.akemi.ai/`) to install unsigned `.ipa` packages without legacy certificate validation issues.
+- **Modern & Intermediate iOS (iOS 7.0 – 12.5.x+):**
+  - **Jailbroken Devices:** Direct installation via Cydia / Zebra / Filza using the `.deb` package or AppSync Unified for `.ipa`.
+  - **Non-Jailbroken Devices:** Sideload the `.ipa` easily using **Sideloadly**, **AltStore**, or **TrollStore** (where supported).
+- **Apple File Conduit "2" (AFC2)** *(Optional)*: Recommended on jailbroken devices for direct USB file transfers via 3uTools, iFunBox, or `ifuse`.
 
 ### 3. How to Install the Release
 
@@ -160,11 +162,11 @@ The status LED will turn **Green** (`Connected (Direct Remote)`). **You can now 
 
 ## 🛠 Building from Source
 
-This project is built using [Theos](https://theos.dev/) targeting `armv7` on `iphone:clang:6.1:5.0`.
+This project is built using [Theos](https://theos.dev/) targeting universal `armv7` and `arm64` on `iphone:clang:9.3:5.0`.
 
 ### Prerequisites
 - WSL Ubuntu / Linux or macOS with Theos installed.
-- iOS 5.0+ SDK (e.g. `iPhoneOS6.1.sdk`).
+- iOS 9.3+ SDK (e.g. `iPhoneOS9.3.sdk`) supporting `armv7` and `arm64` universal compilation.
 
 ### Build Command
 ```bash
