@@ -16,17 +16,46 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Clean obsolete release assets
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            try {
+              const tag = context.ref.replace('refs/tags/', '');
+              const release = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag: tag
+              });
+              if (release && release.data && release.data.assets) {
+                for (const asset of release.data.assets) {
+                  if (asset.name.includes('1.0.0-2') || asset.name.includes('1.0.0-3') || asset.name.includes('1.0.0-4')) {
+                    console.log(`Deleting obsolete asset: ${asset.name} (id: ${asset.id})`);
+                    await github.rest.repos.deleteReleaseAsset({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      asset_id: asset.id
+                    });
+                  }
+                }
+              }
+            } catch (e) {
+              console.log('No existing release or cleanup error:', e.message);
+            }
+
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }} - Standalone Legacy Apple TV Remote
+          make_latest: true
           body: |
             ## Standalone Apple TV 4K / HD Remote for Legacy iOS (iOS 5.0 - 6.1.6)
 
             ### Included Assets:
             - **`AppleTVRemote.ipa`**: Standalone application bundle (for installation via 3uTools, iFunBox, legacy iTunes 12.6.5, or `ideviceinstaller`).
-            - **`ro.solved.appletvremote_1.0.0-1+debug_iphoneos-arm.deb`**: Cydia Debian package (for installation via Cydia, iFile, Filza, or `dpkg -i`).
+            - **`ro.solved.appletvremote_*.deb`**: Cydia Debian package (for installation via Cydia, iFile, Filza, or `dpkg -i`).
 
             ### Prerequisites:
             - Jailbroken 32-bit iOS device (iPod touch 3/4, iPhone 3GS/4/4S, iPad 1/2) running iOS 5.0 through 6.1.6.
